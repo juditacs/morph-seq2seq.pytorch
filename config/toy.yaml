@@ -10,9 +10,10 @@ src_embedding_size: 30
 tgt_embedding_size: 30
 encoder_n_layers: 2
 decoder_n_layers: 1
+eval_batch_size: 1
 dropout_prob: 0.2
 train_schedule:
-    - {lr: 0.01, epochs: 200, batch_size: 1}
-    - {lr: 0.001, epochs: 2000, batch_size: 2}
+    - {lr: 0.01, epochs: 2, batch_size: 1}
+    - {lr: 0.001, epochs: 4, batch_size: 2}
 
 toy_eval: [abc, de]

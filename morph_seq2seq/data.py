@@ -152,10 +152,19 @@ class ValidationDataset(Dataset):
 
 
 class InferenceDataset(Dataset):
-    def __init__(self, cfg, stream):
+    def __init__(self, cfg, stream=None, train_data=None, words=None):
         self.cfg = cfg
-        self.load_vocabs()
-        self.load_data_from_stream(stream=stream)
+        if stream is not None:
+            self.load_vocabs()
+            self.load_data_from_stream(stream=stream)
+        elif words is not None:
+            self.__copy_attrs(train_data)
+            self.load_words(words)
+
+    def __copy_attrs(self, dataset):
+        self.src_vocab = dataset.src_vocab
+        self.tgt_vocab = dataset.tgt_vocab
+        self.src_maxlen = dataset.src_maxlen
 
     def load_vocabs(self):
         with open(self.cfg.src_vocab_file) as f:
@@ -170,7 +179,11 @@ class InferenceDataset(Dataset):
                 self.tgt_vocab[src] = int(tgt)
 
     def load_data_from_stream(self, stream=stdin):
-        self.raw_samples = [l.rstrip("\n").split("\t")[0].split(" ") for l in stream]
+        samples = [l.rstrip("\n").split("\t")[0].split(" ") for l in stream]
+        self.load_words(samples)
+
+    def load_words(self, words):
+        self.raw_samples = words
         self.len_mapping, samples = zip(*sorted(
             enumerate(self.raw_samples), key=lambda x: -len(x[1])))
         PAD = Dataset.CONSTANTS['PAD']
@@ -182,7 +195,8 @@ class InferenceDataset(Dataset):
             for src in samples
         ]
         self.src_len = [len(s) for s in self.samples]
-        self.src_maxlen = maxlen
+        if not hasattr(self, 'src_maxlen'):
+            self.src_maxlen = maxlen
 
     def batched_iter(self, batch_size):
         batch_count = int(np.ceil(len(self.samples) / batch_size))
@@ -201,9 +215,10 @@ class InferenceDataset(Dataset):
             word.symbols = [self.tgt_inv_vocab[s] for s in word.idx]
         inv_len_mapping = {v: i for i, v in enumerate(self.len_mapping)}
         decoded = []
-        for src, tgt in inv_len_mapping.items():
-            decoded.append(outputs[src])
-            outputs[src].input = self.raw_samples[tgt]
+        for src_i in range(len(outputs)):
+            tgt_i = inv_len_mapping[src_i]
+            decoded.append(outputs[tgt_i])
+            outputs[tgt_i].input = self.raw_samples[src_i]
         return decoded
 
     def decode_and_reorganize_beams(self, outputs):
@@ -218,8 +233,9 @@ class InferenceDataset(Dataset):
                 word.symbols = [self.tgt_inv_vocab[s] for s in word.idx]
         inv_len_mapping = {v: i for i, v in enumerate(self.len_mapping)}
         decoded = []
-        for src, tgt in inv_len_mapping.items():
-            decoded.append((self.raw_samples[tgt], outputs[src]))
+        for src_i in range(len(outputs)):
+            tgt_i = inv_len_mapping[src_i]
+            decoded.append((self.raw_samples[src_i], outputs[tgt_i]))
         return decoded
 
 

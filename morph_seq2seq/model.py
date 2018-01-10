@@ -11,6 +11,7 @@ from collections import defaultdict
 import numpy as np
 import os
 import yaml
+import logging
 from datetime import datetime
 
 import torch
@@ -119,7 +120,7 @@ class LuongAttentionDecoder(nn.Module):
 
 
 class Seq2seqModel(nn.Module):
-    def __init__(self, train_data, val_data, cfg):
+    def __init__(self, train_data, val_data, cfg, toy_data=None):
         super(self.__class__, self).__init__()
         self.encoder = EncoderRNN(cfg)
         if cfg.attention == 'luong':
@@ -130,6 +131,7 @@ class Seq2seqModel(nn.Module):
         self.val_data = val_data
         self.cfg = cfg
         self.softmax = nn.Softmax(dim=1)
+        self.toy_data = toy_data
 
     def init_optim(self, lr):
         self.enc_opt = getattr(optim, self.cfg.optimizer)(
@@ -141,12 +143,14 @@ class Seq2seqModel(nn.Module):
         self.max_val_loss = 1000
         epoch_offset = 0
         for step in self.cfg.train_schedule:
+            logging.info("Running training step {}".format(step))
             self.init_optim(step['lr'])
             for epoch in range(epoch_offset, epoch_offset+step['epochs']):
+                loss = 0.0
                 self.train(True)
                 for ti, batch in enumerate(
                     self.dataset.batched_iter(step['batch_size'])):
-                    loss = self.train_batch(batch)
+                    loss += self.train_batch(batch)
                 loss /= (ti + 1)
                 # validation
                 self.train(False)
@@ -163,6 +167,18 @@ class Seq2seqModel(nn.Module):
                     self.result.val_loss.append(val_loss)
                 except AttributeError:
                     pass
+                logging.info("Epoch {}, train loss {}, val loss {}".format(
+                    epoch+1, loss, val_loss))
+                self.eval_toy()
+            epoch_offset += step['epochs']
+
+    def eval_toy(self):
+        if self.toy_data is None:
+            return
+        decoded = self.run_greedy_inference(self.toy_data)
+        words = self.toy_data.decode_and_reorganize(decoded)
+        for i, word in enumerate(words):
+            print("{}\t{}".format("".join(word.input), "".join(word.symbols)))
 
     def save_model(self, epoch):
         save_path = os.path.join(
@@ -259,7 +275,7 @@ class Seq2seqModel(nn.Module):
                 elif mode == 'beam_search':
                     decoder = BeamSearchDecoder(
                         self.decoder, beam_width, encoder_outputs,
-                        encoder_hidden, maxlen)
+                        decoder_hidden, maxlen)
                     while decoder.is_finished() is False:
                         decoder.forward()
                     all_output.append(decoder.get_finished_candidates())
