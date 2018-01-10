@@ -36,6 +36,7 @@ class Experiment(object):
         self.model = Seq2seqModel(train_data, val_data, self.cfg)
         if use_cuda:
             self.model = self.model.cuda()
+        self.train_data = train_data
 
     def __enter__(self):
         self.result = Result()
@@ -49,6 +50,7 @@ class Experiment(object):
         self.cfg.save(fn)
         fn = os.path.join(self.cfg.experiment_dir, 'result.yaml')
         self.result.save(fn)
+        self.train_data.save_vocabs()
 
     def run(self):
         self.model.run_train_schedule()
@@ -58,19 +60,6 @@ def main():
     args = parse_args()
     with Experiment(args.config) as e:
         e.run()
-        return
-    cfg = Config.from_yaml(args.config)
-    with open(cfg.train_file) as f:
-        train_data = Dataset(cfg, f)
-    with open(cfg.dev_file) as f:
-        val_data = ValidationDataset(train_data=train_data, stream=f)
-    model = Seq2seqModel(train_data, val_data, cfg)
-    with Result(cfg) as result:
-        model.result = result
-        if use_cuda:
-            model = model.cuda()
-        model.run_train_schedule()
-
 
 if __name__ == '__main__':
     use_cuda = torch.cuda.is_available()

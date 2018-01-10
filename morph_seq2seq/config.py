@@ -23,12 +23,12 @@ class Config(object):
     )
     __slots__ = (
         'share_vocab', 'src_embedding_size', 'tgt_embedding_size', 'batch_size',
-        'num_layers', 'dropout_prob', 'cell_type', 'hidden_size',
-        'input_size', 'output_size',
+        'encoder_n_layers', 'decoder_n_layers', 'dropout_prob',
+        'cell_type', 'hidden_size', 'input_size', 'output_size',
         'attention', 'optimizer', 'optimizer_kwargs',
         'train_schedule', 'generate_empty_subdir', 'teacher_forcing_ratio',
         'src_vocab_file', 'tgt_vocab_file', 'derive_vocab',
-        'toy_eval',
+        'toy_eval', 'eval_batch_size',
     ) + path_variables
 
     defaults = {
@@ -38,6 +38,8 @@ class Config(object):
         'optimizer': 'SGD',
         'optimizer_kwargs': {},
         'teacher_forcing_ratio': 0.8,
+        'src_vocab_file': None,
+        'tgt_vocab_file': None,
     }
 
     @classmethod
@@ -85,6 +87,9 @@ class Config(object):
             self.experiment_dir = os.path.join(
                 self.experiment_dir, fmt.format(i))
             os.makedirs(self.experiment_dir)
+        if self.src_vocab_file is None:
+            self.src_vocab_file = os.path.join(self.experiment_dir, 'src_vocab')
+            self.tgt_vocab_file = os.path.join(self.experiment_dir, 'tgt_vocab')
 
     def validate_params(self):
         if self.attention not in ('luong', 'bahdanau'):
@@ -103,3 +108,9 @@ class Config(object):
         d = {k: getattr(self, k, None) for k in self.__slots__}
         with open(fn, 'w') as f:
             yaml.dump(d, f)
+
+
+class InferenceConfig(Config):
+    def __init__(self, **kwargs):
+        kwargs['generate_empty_subdir'] = False
+        super(self.__class__, self).__init__(**kwargs)

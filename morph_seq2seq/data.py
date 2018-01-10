@@ -8,6 +8,7 @@
 
 from collections import defaultdict
 from sys import stdin
+import os
 import numpy as np
 
 import torch
@@ -103,10 +104,8 @@ class Dataset(object):
         return src, tgt, src_len, tgt_len
 
     def batched_iter(self, batch_size):
-        batch_count = len(self.samples) // batch_size
-        if batch_count * batch_size < len(self.samples):
-            batch_count += 1
-        for i in range(0, batch_count):
+        batch_count = int(np.ceil(len(self.samples) / batch_size))
+        for i in range(batch_count):
             start = i * batch_size
             end = min((i+1) * batch_size, len(self.samples))
             batch = self.samples[start:end]
@@ -131,6 +130,18 @@ class Dataset(object):
 
             yield src, tgt, src_len, tgt_len
 
+    def save_vocabs(self):
+        src_fn = os.path.join(self.cfg.experiment_dir, 'src_vocab')
+        with open(src_fn, 'w') as f:
+            f.write("\n".join(
+                "{}\t{}".format(s, t) for s, t in sorted(self.src_vocab.items())
+            ))
+        tgt_fn = os.path.join(self.cfg.experiment_dir, 'tgt_vocab')
+        with open(tgt_fn, 'w') as f:
+            f.write("\n".join(
+                "{}\t{}".format(s, t) for s, t in sorted(self.tgt_vocab.items())
+            ))
+
 
 class ValidationDataset(Dataset):
     def __init__(self, train_data, stream):
@@ -143,18 +154,78 @@ class ValidationDataset(Dataset):
 class InferenceDataset(Dataset):
     def __init__(self, cfg, stream):
         self.cfg = cfg
-        self.load_src_vocab()
+        self.load_vocabs()
         self.load_data_from_stream(stream=stream)
 
-    def load_src_vocab(self):
+    def load_vocabs(self):
         with open(self.cfg.src_vocab_file) as f:
             self.src_vocab = {}
             for l in f:
                 src, tgt = l.rstrip("\n").split("\t")
-                self.src_vocab[src] = tgt
+                self.src_vocab[src] = int(tgt)
+        with open(self.cfg.tgt_vocab_file) as f:
+            self.tgt_vocab = {}
+            for l in f:
+                src, tgt = l.rstrip("\n").split("\t")
+                self.tgt_vocab[src] = int(tgt)
 
     def load_data_from_stream(self, stream=stdin):
-        self.samples = []
-        self.raw_samples = [l.rstrip("\n") for l in stream]
-        self.len_mapping, self.samples = zip(*sorted(
+        self.raw_samples = [l.rstrip("\n").split("\t")[0].split(" ") for l in stream]
+        self.len_mapping, samples = zip(*sorted(
             enumerate(self.raw_samples), key=lambda x: -len(x[1])))
+        PAD = Dataset.CONSTANTS['PAD']
+        UNK = Dataset.CONSTANTS['UNK']
+        maxlen = max(len(s) for s in samples)
+        self.samples = [
+            [self.src_vocab.get(c, UNK) for c in src] +
+            [PAD] * (maxlen-len(src))
+            for src in samples
+        ]
+        self.src_len = [len(s) for s in self.samples]
+        self.src_maxlen = maxlen
+
+    def batched_iter(self, batch_size):
+        batch_count = int(np.ceil(len(self.samples) / batch_size))
+        for i in range(batch_count):
+            start = i * batch_size
+            end = min((i+1) * batch_size, len(self.samples))
+            batch = self.samples[start:end]
+            batch_len = self.src_len[start:end]
+            batch = Variable(torch.LongTensor(batch)).transpose(0, 1)
+            batch = batch.cuda() if use_cuda else batch
+            yield batch, batch_len
+
+    def decode_and_reorganize(self, outputs):
+        self.tgt_inv_vocab = {v: k for k, v in self.tgt_vocab.items()}
+        for word in outputs:
+            word.symbols = [self.tgt_inv_vocab[s] for s in word.idx]
+        inv_len_mapping = {v: i for i, v in enumerate(self.len_mapping)}
+        decoded = []
+        for src, tgt in inv_len_mapping.items():
+            decoded.append(outputs[src])
+            outputs[src].input = self.raw_samples[tgt]
+        return decoded
+
+    def decode_and_reorganize_beams(self, outputs):
+        self.tgt_inv_vocab = {v: k for k, v in self.tgt_vocab.items()}
+        EOS = self.CONSTANTS['EOS']
+        for words in outputs:
+            for word in words:
+                try:
+                    word.idx = word.idx[:word.idx.index(EOS)]
+                except ValueError:
+                    pass
+                word.symbols = [self.tgt_inv_vocab[s] for s in word.idx]
+        inv_len_mapping = {v: i for i, v in enumerate(self.len_mapping)}
+        decoded = []
+        for src, tgt in inv_len_mapping.items():
+            decoded.append((self.raw_samples[tgt], outputs[src]))
+        return decoded
+
+
+class DecodedWord(object):
+    __slots__ = ('idx', 'prob', 'symbols', 'decoder_hidden', 'input')
+
+    def __init__(self):
+        self.idx = []
+        self.prob = 1.0

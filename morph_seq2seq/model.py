@@ -19,7 +19,7 @@ from torch.autograd import Variable
 from torch import optim
 import torch.nn.functional as F
 
-from morph_seq2seq.data import Dataset
+from morph_seq2seq.data import Dataset, InferenceDataset, DecodedWord
 from morph_seq2seq.loss import masked_cross_entropy
 
 use_cuda = torch.cuda.is_available()
@@ -37,13 +37,13 @@ class EncoderRNN(nn.Module):
         if self.cfg.cell_type == 'LSTM':
             self.cell = nn.LSTM(
                 self.cfg.src_embedding_size, self.cfg.hidden_size,
-                num_layers=self.cfg.num_layers,
+                num_layers=self.cfg.encoder_n_layers,
                 bidirectional=True
             )
         elif self.cfg.cell_type == 'GRU':
             self.cell = nn.GRU(
                 self.cfg.src_embedding_size, self.cfg.hidden_size,
-                num_layers=self.cfg.num_layers,
+                num_layers=self.cfg.encoder_n_layers,
                 bidirectional=True
             )
 
@@ -93,7 +93,7 @@ class LuongAttentionDecoder(nn.Module):
         self.cfg = cfg
         self.hidden_size = cfg.hidden_size
         self.output_size = cfg.output_size
-        self.n_layers = cfg.num_layers
+        self.n_layers = cfg.decoder_n_layers
         self.embedding_size = cfg.tgt_embedding_size
 
         self.embedding = nn.Embedding(self.output_size, self.embedding_size)
@@ -129,6 +129,7 @@ class Seq2seqModel(nn.Module):
         self.dataset = train_data
         self.val_data = val_data
         self.cfg = cfg
+        self.softmax = nn.Softmax(dim=1)
 
     def init_optim(self, lr):
         self.enc_opt = getattr(optim, self.cfg.optimizer)(
@@ -216,8 +217,186 @@ class Seq2seqModel(nn.Module):
     def run_val_batch(self, batch):
         return self.train_batch(batch, do_train=False)
 
-    def run_greedy_inference(self, samples):
-        data = InferenceDataset(samples)
+    def run_greedy_inference(self, test_data):
+        return self.run_inference(test_data, 'greedy')
+
+    def run_beam_search_inference(self, test_data, beam_width):
+        return self.run_inference(test_data, 'beam_search', beam_width)
+
+    def run_inference(self, test_data, mode='greedy', beam_width=3):
+        assert isinstance(test_data, InferenceDataset)
+        if self.cfg.eval_batch_size is None:
+            batch_size = self.cfg.train_schedule[0]['batch_size']
+        else:
+            batch_size = self.cfg.eval_batch_size
+        all_output = []
+        for src, src_len in test_data.batched_iter(batch_size):
+            all_encoder_outputs, encoder_hidden = self.encoder(src, src_len)
+
+            if isinstance(encoder_hidden, tuple):
+                decoder_hidden = tuple(e[:self.cfg.decoder_n_layers]
+                                    for e in encoder_hidden)
+            else:
+                decoder_hidden = encoder_hidden[:self.cfg.decoder_n_layers]
+            all_decoder_hidden = decoder_hidden
+            for si in range(len(src_len)):
+                if isinstance(all_decoder_hidden, tuple):
+                    decoder_hidden = tuple(
+                        a[:, si, :].unsqueeze(1).contiguous()
+                        for a in all_decoder_hidden)
+                else:
+                    decoder_hidden = all_decoder_hidden[:, si, :].unsqueeze(
+                        1).contiguous()
+                encoder_outputs = all_encoder_outputs[:, si, :].unsqueeze(1)
+                maxlen = test_data.src_maxlen * 3  # arbitrary
+                if mode == 'greedy':
+                    all_output.append(self.__decode_sample_greedy(
+                        encoder_outputs,
+                        decoder_hidden,
+                        dataset=test_data,
+                        maxlen=maxlen,
+                    ))
+                elif mode == 'beam_search':
+                    decoder = BeamSearchDecoder(
+                        self.decoder, beam_width, encoder_outputs,
+                        encoder_hidden, maxlen)
+                    while decoder.is_finished() is False:
+                        decoder.forward()
+                    all_output.append(decoder.get_finished_candidates())
+        return all_output
+
+    def __decode_sample_greedy(self, encoder_outputs, decoder_hidden, dataset,
+                               maxlen):
+        decoder_input = Variable(torch.LongTensor(
+            [dataset.CONSTANTS['SOS']]))
+        if use_cuda:
+            decoder_input = decoder_input.cuda()
+        word = DecodedWord()
+        for i in range(maxlen):
+            decoder_output, decoder_hidden, da = self.decoder(
+                decoder_input, decoder_hidden, encoder_outputs)
+            decoder_output = self.softmax(decoder_output)
+            topv, topi = decoder_output.data.topk(1)
+            ni = topi[0][0]
+            if ni == dataset.CONSTANTS['EOS']:
+                break
+            word.idx.append(ni)
+            word.prob *= topv[0][0]
+            decoder_input = Variable(torch.LongTensor([ni]))
+            if use_cuda:
+                decoder_input = decoder_input.cuda()
+        return word
+
+
+class Beam(object):
+    @classmethod
+    def from_single_idx(cls, output, idx, hidden):
+        beam = cls()
+        beam.output = output
+        beam.probs = [output.data[0, idx]]
+        beam.idx = [idx]
+        beam.hidden = hidden
+        return beam
+
+    @classmethod
+    def from_existing(cls, source, output, idx, hidden):
+        beam = cls()
+        beam.output = output
+        beam.probs = source.probs.copy()
+        beam.probs.append(output.data[0, idx])
+        beam.idx = source.idx.copy()
+        beam.idx.append(idx)
+        beam.hidden = hidden
+        return beam
+
+    def decode(self, data):
+        try:
+            eos = data.CONSTANTS['EOS']
+            self.idx = self.idx[:self.idx.index(eos)]
+        except ValueError:
+            pass
+        rev = [data.tgt_reverse_lookup(s) for s in self.idx]
+        return "".join(rev)
+
+    def is_finished(self):
+        return len(self.idx) > 0 and \
+            self.idx[-1] == Dataset.CONSTANTS['EOS']
+
+    def __len__(self):
+        return len(self.idx)
+
+    @property
+    def prob(self):
+        p = 1.0
+        for o in self.probs:
+            p *= o
+        return p
+
+
+class BeamSearchDecoder(nn.Module):
+    def __init__(self, decoder, width, encoder_outputs, encoder_hidden,
+                 max_iter):
+        super(self.__class__, self).__init__()
+        self.decoder = decoder
+        self.width = width
+        self.encoder_hidden = encoder_hidden
+        self.encoder_outputs = encoder_outputs
+        self.decoder_outputs = []
+        self.softmax = nn.Softmax(dim=1)
+        self.init_candidates()
+        self.max_iter = max_iter
+        self.finished_candidates = []
+
+    def init_candidates(self):
+        self.candidates = []
+        decoder_input = Variable(torch.LongTensor([Dataset.CONSTANTS['SOS']]))
+        if use_cuda:
+            decoder_input = decoder_input.cuda()
+        if isinstance(self.encoder_hidden, tuple):
+            decoder_hidden = tuple(e[:self.decoder.n_layers]
+                                   for e in self.encoder_hidden)
+        else:
+            decoder_hidden = self.encoder_hidden[:self.decoder.n_layers]
+        output, hidden, _ = self.decoder(decoder_input, decoder_hidden,
+                                         self.encoder_outputs)
+        output = self.softmax(output)
+        top_out, top_idx = output.data.topk(self.width)
+        for i in range(top_out.size()[1]):
+            self.candidates.append(Beam.from_single_idx(
+                output=output, idx=top_idx[0, i], hidden=hidden))
+
+    def is_finished(self):
+        if self.max_iter < 0:
+            return True
+        return len(self.candidates) == self.width and \
+            all(c.is_finished() for c in self.candidates)
+
+    def forward(self):
+        self.max_iter -= 1
+        if self.max_iter < 0:
+            return
+        new_candidates = []
+        for c in self.candidates:
+            if c.is_finished():
+                self.finished_candidates.append(c)
+                continue
+            decoder_input = Variable(torch.LongTensor([c.idx[-1]]))
+            if use_cuda:
+                decoder_input = decoder_input.cuda()
+            output, hidden, _ = self.decoder(
+                decoder_input, c.hidden, self.encoder_outputs)
+            output = self.softmax(output)
+            top_out, top_idx = output.data.topk(self.width)
+            for i in range(top_out.size()[1]):
+                new_candidates.append(
+                    Beam.from_existing(source=c, output=output,
+                                       idx=top_idx[0, i], hidden=hidden))
+        self.candidates = sorted(
+            new_candidates, key=lambda x: -x.prob)[:self.width]
+
+    def get_finished_candidates(self):
+        return sorted(self.candidates + self.finished_candidates,
+                      key=lambda x: -x.prob)[:self.width]
 
 
 class Result(object):
