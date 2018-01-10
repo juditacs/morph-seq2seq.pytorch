@@ -1,7 +1,10 @@
 # morph-seq2seq.pytorch
+
 My working codebase for seq2seq experiments using PyTorch
 
 I am a beginner in PyTorch. If you have any comments or suggestions please file an issue.
+
+My implementation is based on Sean Robertson's awesome [Practical PyTorch](https://github.com/spro/practical-pytorch).
 
 ## Installing
 
@@ -101,3 +104,21 @@ The sequence probabilities can be printed as well (in both modes):
 
     python morph_seq2seq/inference.py --experiment-dir experiments/toy/0000 --test-file data/toy --mode beam_search --beam-width 2 --print-probabilities
 
+## Caveats
+
+Since this is my working codebase I may change it any time. Also I sacrificed
+configurability for the sake of code clearness (arguably it was not very
+successful) in a few cases:
+
+* the encoder must be bidirectional,
+* the decoder must use attention,
+* the encoder and the decoder must have the same number of cells, although the
+  number of layers may differ.
+
+All the data is read into memory and kept there at the beginning of each
+experiment. The reason for this is that I haven't had so much training data
+that physical memory was a limiting factor in any way.
+
+The inference script removes spaces from between symbols which is obviously
+convenient for character-level data but less so for word-level data. If it
+bothers you, you can change it with a small modification in `inference.py`.
