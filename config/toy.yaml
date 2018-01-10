@@ -1,5 +1,5 @@
-train_file: ${DATA_DIR}/toy/seq2seq/train
-dev_file: ${DATA_DIR}/toy/seq2seq/train
+train_file: data/toy
+dev_file: data/toy
 
 experiment_dir: ${EXP_DIR}/toy
 generate_empty_subdir: true
@@ -13,7 +13,7 @@ decoder_n_layers: 1
 eval_batch_size: 1
 dropout_prob: 0.2
 train_schedule:
-    - {lr: 0.01, epochs: 2, batch_size: 1}
-    - {lr: 0.001, epochs: 4, batch_size: 2}
+    - {lr: 0.001, epochs: 2, batch_size: 1}
+    - {lr: 0.0001, epochs: 4, batch_size: 2}
 
-toy_eval: [abc, de]
+toy_eval: [abc, eg]
