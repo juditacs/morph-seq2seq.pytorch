@@ -8,8 +8,6 @@
 
 from argparse import ArgumentParser
 import os
-from sys import stdout
-import logging
 
 import torch
 
@@ -68,8 +66,6 @@ class Inference(object):
 
 def main():
     args = parse_args()
-    logging.info("{} inference using experiment dir: {}".format(
-        args.mode, args.experiment_dir))
     if args.mode == 'greedy':
         inf_model = Inference(args.experiment_dir, args.test_file, args.mode)
         words = inf_model.run_inference()
@@ -78,7 +74,8 @@ def main():
                 print("{}\t{}\t{}".format("".join(word.input),
                                           "".join(word.symbols), word.prob))
             else:
-                print("{}\t{}".format("".join(word.input), "".join(word.symbols)))
+                print("{}\t{}".format("".join(word.input),
+                                      "".join(word.symbols)))
 
     elif args.mode == 'beam_search':
         inf_model = Inference(args.experiment_dir, args.test_file, args.mode,
@@ -93,7 +90,5 @@ def main():
             print("\t".join(map(str, out)))
 
 if __name__ == '__main__':
-    log_fmt = '%(asctime)s - %(levelname)s - %(message)s'
-    logging.basicConfig(level=logging.INFO, format=log_fmt)
     use_cuda = torch.cuda.is_available()
     main()
