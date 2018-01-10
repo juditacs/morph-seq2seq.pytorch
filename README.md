@@ -3,6 +3,14 @@ My working codebase for seq2seq experiments using PyTorch
 
 I am a beginner in PyTorch. If you have any comments or suggestions please file an issue.
 
+## Installing
+
+Clone and install the package via pip:
+
+    git clone git@github.com:juditacs/morph-seq2seq.pytorch.git
+    cd morph-seq2seq.pytorch
+    pip install -e .
+
 ## Training and test file formats
 
 Training and development files are expected to contain one sample-per-line with the input and output separated by TAB. Symbols are separated by spaces. For example a one sentence English-French parallel corpus would look like this (tokenization may differ):
