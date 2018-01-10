@@ -8,6 +8,7 @@
 
 from argparse import ArgumentParser
 import os
+from sys import stdin
 
 import torch
 
@@ -24,7 +25,7 @@ def parse_args():
                    default='greedy')
     p.add_argument("-b", "--beam-width", type=int, default=3,
                    help="Beam width. Only used in beam search mode")
-    p.add_argument("-t", "--test-file", type=str,
+    p.add_argument("-t", "--test-file", type=str, default=None,
                    help="Test file location")
     p.add_argument("--print-probabilities", action="store_true",
                    default=False,
@@ -37,8 +38,11 @@ class Inference(object):
         self.exp_dir = exp_dir
         cfg = os.path.join(exp_dir, 'config.yaml')
         self.cfg = InferenceConfig.from_yaml(cfg)
-        with open(test_file_fn) as f:
-            self.test_data = InferenceDataset(self.cfg, f)
+        if test_file_fn is not None:
+            with open(test_file_fn) as f:
+                self.test_data = InferenceDataset(self.cfg, f)
+        else:
+            self.test_data = InferenceDataset(self.cfg, stdin)
         self.model = Seq2seqModel(cfg=self.cfg, train_data=None, val_data=None)
         self.model = self.model.cuda() if use_cuda else self.model
         model_fn = self.find_last_model()
