@@ -152,11 +152,12 @@ class ValidationDataset(Dataset):
 
 
 class InferenceDataset(Dataset):
-    def __init__(self, cfg, stream=None, train_data=None, words=None):
+    def __init__(self, cfg, stream=None, train_data=None, words=None,
+                 spaces=True):
         self.cfg = cfg
         if stream is not None:
             self.load_vocabs()
-            self.load_data_from_stream(stream=stream)
+            self.load_data_from_stream(stream=stream, spaces=spaces)
         elif words is not None:
             self.__copy_attrs(train_data)
             self.load_words(words)
@@ -178,8 +179,11 @@ class InferenceDataset(Dataset):
                 src, tgt = l.rstrip("\n").split("\t")
                 self.tgt_vocab[src] = int(tgt)
 
-    def load_data_from_stream(self, stream=stdin):
-        samples = [l.rstrip("\n").split("\t")[0].split(" ") for l in stream]
+    def load_data_from_stream(self, stream=stdin, spaces=True):
+        if spaces is True:
+            samples = [l.rstrip("\n").split("\t")[0].split(" ") for l in stream]
+        else:
+            samples = [list(l.rstrip("\n").split("\t")[0]) for l in stream]
         self.load_words(samples)
 
     def load_words(self, words):

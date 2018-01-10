@@ -42,7 +42,7 @@ class Inference(object):
             with open(test_file_fn) as f:
                 self.test_data = InferenceDataset(self.cfg, f)
         else:
-            self.test_data = InferenceDataset(self.cfg, stdin)
+            self.test_data = InferenceDataset(self.cfg, stdin, spaces=False)
         self.model = Seq2seqModel(cfg=self.cfg, train_data=None, val_data=None)
         self.model = self.model.cuda() if use_cuda else self.model
         model_fn = self.find_last_model()
