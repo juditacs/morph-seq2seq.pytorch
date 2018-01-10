@@ -21,6 +21,9 @@ def parse_args():
     p = ArgumentParser()
     p.add_argument("-c", "--config", type=str,
                    help="YAML config file location")
+    p.add_argument("--load-model", type=str, default=None,
+                   help="Continue training this model. The model"
+                   " must have the same parameters.")
     return p.parse_args()
 
 
@@ -65,10 +68,15 @@ class Experiment(object):
         logging.info("Starting training")
         self.model.run_train_schedule()
 
+    def load_model_params(self, model_fn):
+        self.model.load_state_dict(torch.load(model_fn))
+
 
 def main():
     args = parse_args()
     with Experiment(args.config) as e:
+        if args.load_model is not None:
+            e.load_model_params(args.load_model)
         e.run()
 
 if __name__ == '__main__':
