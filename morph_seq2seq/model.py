@@ -178,12 +178,13 @@ class Seq2seqModel(nn.Module):
         decoded = self.run_greedy_inference(self.toy_data)
         words = self.toy_data.decode_and_reorganize(decoded)
         for i, word in enumerate(words):
-            print("{}\t{}".format("".join(word.input), "".join(word.symbols)))
+            logging.info("{}\t{}".format("".join(word.input), "".join(word.symbols)))
 
     def save_model(self, epoch):
         save_path = os.path.join(
             self.cfg.experiment_dir,
             "model.epoch_{}".format("{0:04d}".format(epoch)))
+        logging.info("Saving model to {}".format(save_path))
         torch.save(self.state_dict(), save_path)
 
     def train_batch(self, batch, do_train=True):
