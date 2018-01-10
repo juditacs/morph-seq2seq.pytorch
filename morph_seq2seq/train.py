@@ -53,6 +53,7 @@ class Experiment(object):
         self.model.result = self.result
         fn = os.path.join(self.cfg.experiment_dir, 'config.yaml')
         self.cfg.save(fn)
+        self.train_data.save_vocabs()
         self.result.start()
         return self
 
@@ -62,7 +63,6 @@ class Experiment(object):
         self.result.stop()
         fn = os.path.join(self.cfg.experiment_dir, 'result.yaml')
         self.result.save(fn)
-        self.train_data.save_vocabs()
 
     def run(self):
         logging.info("Starting training")
