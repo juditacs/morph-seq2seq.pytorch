@@ -51,6 +51,8 @@ class Experiment(object):
     def __enter__(self):
         self.result = Result()
         self.model.result = self.result
+        fn = os.path.join(self.cfg.experiment_dir, 'config.yaml')
+        self.cfg.save(fn)
         self.result.start()
         return self
 
@@ -58,8 +60,6 @@ class Experiment(object):
         logging.info("Saving experiment to {}".format(
             self.cfg.experiment_dir))
         self.result.stop()
-        fn = os.path.join(self.cfg.experiment_dir, 'config.yaml')
-        self.cfg.save(fn)
         fn = os.path.join(self.cfg.experiment_dir, 'result.yaml')
         self.result.save(fn)
         self.train_data.save_vocabs()
