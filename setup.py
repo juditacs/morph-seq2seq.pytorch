@@ -8,4 +8,10 @@ setup(name='morph_seq2seq',
       author_email='judit@sch.bme.hu',
       license='MIT',
       packages=['morph_seq2seq'],
+      install_requires=[
+          'pyyaml',
+          'numpy',
+          'torch',
+          'torchvision',
+      ],
       zip_safe=False)
