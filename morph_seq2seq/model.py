@@ -31,6 +31,7 @@ class EncoderRNN(nn.Module):
         super(self.__class__, self).__init__()
         self.cfg = cfg
 
+        self.embedding_dropout = nn.Dropout(cfg.dropout)
         self.embedding = nn.Embedding(cfg.input_size, cfg.src_embedding_size)
         self.__init_cell()
 
@@ -39,17 +40,20 @@ class EncoderRNN(nn.Module):
             self.cell = nn.LSTM(
                 self.cfg.src_embedding_size, self.cfg.hidden_size,
                 num_layers=self.cfg.encoder_n_layers,
-                bidirectional=True
+                bidirectional=True,
+                dropout=self.cfg.dropout,
             )
         elif self.cfg.cell_type == 'GRU':
             self.cell = nn.GRU(
                 self.cfg.src_embedding_size, self.cfg.hidden_size,
                 num_layers=self.cfg.encoder_n_layers,
-                bidirectional=True
+                bidirectional=True,
+                dropout=self.cfg.dropout,
             )
 
     def forward(self, input, input_seqlen):
         embedded = self.embedding(input)
+        embedded = self.embedding_dropout(embedded)
         packed = torch.nn.utils.rnn.pack_padded_sequence(embedded, input_seqlen)
         outputs, hidden = self.cell(packed)
         outputs, ol = torch.nn.utils.rnn.pad_packed_sequence(outputs)
@@ -97,18 +101,35 @@ class LuongAttentionDecoder(nn.Module):
         self.n_layers = cfg.decoder_n_layers
         self.embedding_size = cfg.tgt_embedding_size
 
+        self.embedding_dropout = nn.Dropout(cfg.dropout)
         self.embedding = nn.Embedding(self.output_size, self.embedding_size)
-        self.gru = nn.LSTM(self.embedding_size, self.hidden_size,
-                           num_layers=self.n_layers)
+        self.__init_cell()
         self.concat = nn.Linear(2*self.hidden_size, self.hidden_size)
         self.out = nn.Linear(self.hidden_size, self.output_size)
         self.attn = Attention('general', self.hidden_size)
 
+    def __init_cell(self):
+        if self.cfg.cell_type == 'LSTM':
+            self.cell = nn.LSTM(
+                self.cfg.tgt_embedding_size, self.cfg.hidden_size,
+                num_layers=self.cfg.decoder_n_layers,
+                bidirectional=False,
+                dropout=self.cfg.dropout,
+            )
+        elif self.cfg.cell_type == 'GRU':
+            self.cell = nn.GRU(
+                self.cfg.tgt_embedding_size, self.cfg.hidden_size,
+                num_layers=self.cfg.decoder_n_layers,
+                bidirectional=False,
+                dropout=self.cfg.dropout,
+            )
+
     def forward(self, input_seq, last_hidden, encoder_outputs):
         batch_size = input_seq.size(0)
         embedded = self.embedding(input_seq)
+        embedded = self.embedding_dropout(embedded)
         embedded = embedded.view(1, batch_size, self.embedding_size)
-        rnn_output, hidden = self.gru(embedded, last_hidden)
+        rnn_output, hidden = self.cell(embedded, last_hidden)
         attn_weights = self.attn(rnn_output, encoder_outputs)
         context = attn_weights.bmm(encoder_outputs.transpose(0, 1))
         rnn_output = rnn_output.squeeze(0)

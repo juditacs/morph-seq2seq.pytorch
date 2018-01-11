@@ -23,7 +23,7 @@ class Config(object):
     )
     __slots__ = (
         'share_vocab', 'src_embedding_size', 'tgt_embedding_size', 'batch_size',
-        'encoder_n_layers', 'decoder_n_layers', 'dropout_prob',
+        'encoder_n_layers', 'decoder_n_layers', 'dropout',
         'cell_type', 'hidden_size', 'input_size', 'output_size',
         'attention', 'optimizer', 'optimizer_kwargs',
         'train_schedule', 'generate_empty_subdir', 'teacher_forcing_ratio',
