@@ -111,8 +111,8 @@ class Dataset(object):
             batch = self.samples[start:end]
             src = [s[0] for s in batch]
             tgt = [s[1] for s in batch]
-            src_len = [self.src_seqlen[bi] for bi in range(start, end)]
-            tgt_len = [self.tgt_seqlen[bi] for bi in range(start, end)]
+            src_len = self.src_seqlen[start:end]
+            tgt_len = self.tgt_seqlen[start:end]
 
             batch = zip(src, tgt, src_len, tgt_len)
             batch = sorted(batch, key=lambda x: -x[2])
@@ -198,7 +198,7 @@ class InferenceDataset(Dataset):
             [PAD] * (maxlen-len(src))
             for src in samples
         ]
-        self.src_len = [len(s) for s in self.samples]
+        self.src_len = [len(s) for s in samples]
         if not hasattr(self, 'src_maxlen'):
             self.src_maxlen = maxlen
 
