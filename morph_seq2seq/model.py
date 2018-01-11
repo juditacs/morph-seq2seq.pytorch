@@ -180,6 +180,8 @@ class Seq2seqModel(nn.Module):
                     self.val_data.batched_iter(step['batch_size'])):
                     val_loss += self.run_val_batch(batch)
                 val_loss /= (val_i + 1)
+                logging.info("Epoch {}, train loss {}, val loss {}".format(
+                    epoch, loss, val_loss))
                 if val_loss < self.max_val_loss:
                     self.max_val_loss = val_loss
                     self.save_model(epoch)
@@ -188,8 +190,6 @@ class Seq2seqModel(nn.Module):
                     self.result.val_loss.append(val_loss)
                 except AttributeError:
                     pass
-                logging.info("Epoch {}, train loss {}, val loss {}".format(
-                    epoch+1, loss, val_loss))
                 self.eval_toy()
             epoch_offset += step['epochs']
 
@@ -228,7 +228,7 @@ class Seq2seqModel(nn.Module):
                 decoder_input, decoder_hidden, encoder_outputs
             )
             all_decoder_outputs[t] = decoder_output
-            if np.random.random() < self.cfg.teacher_forcing_ratio:
+            if np.random.random() <= self.cfg.teacher_forcing_ratio:
                 decoder_input = tgt[t]
             else:
                 val, idx = decoder_output.max(-1)
