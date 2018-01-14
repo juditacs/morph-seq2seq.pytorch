@@ -433,8 +433,12 @@ class BeamSearchDecoder(nn.Module):
             new_candidates, key=lambda x: -x.prob)[:self.width]
 
     def get_finished_candidates(self):
-        return sorted(self.candidates + self.finished_candidates,
-                      key=lambda x: -x.prob)[:self.width]
+        top = sorted(self.candidates + self.finished_candidates,
+                     key=lambda x: -x.prob)[:self.width]
+        for t in top:
+            delattr(t, 'hidden')
+            delattr(t, 'output')
+        return top
 
 
 class Result(object):
