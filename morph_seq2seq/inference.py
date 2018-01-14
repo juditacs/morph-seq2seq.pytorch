@@ -45,6 +45,7 @@ class Inference(object):
             self.test_data = InferenceDataset(self.cfg, stdin, spaces=False)
         self.model = Seq2seqModel(cfg=self.cfg, train_data=None, val_data=None)
         self.model = self.model.cuda() if use_cuda else self.model
+        self.model.train(False)
         model_fn = self.find_last_model()
         self.model.load_state_dict(torch.load(model_fn))
         self.mode = mode
