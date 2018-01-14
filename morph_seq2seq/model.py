@@ -6,8 +6,6 @@
 #
 # Distributed under terms of the MIT license.
 
-from sys import stdin
-from collections import defaultdict
 import numpy as np
 import os
 import yaml
@@ -170,14 +168,14 @@ class Seq2seqModel(nn.Module):
                 loss = 0.0
                 self.train(True)
                 for ti, batch in enumerate(
-                    self.dataset.batched_iter(step['batch_size'])):
+                        self.dataset.batched_iter(step['batch_size'])):
                     loss += self.train_batch(batch)
                 loss /= (ti + 1)
                 # validation
                 self.train(False)
                 val_loss = 0.0
                 for val_i, batch in enumerate(
-                    self.val_data.batched_iter(step['batch_size'])):
+                        self.val_data.batched_iter(step['batch_size'])):
                     val_loss += self.run_val_batch(batch)
                 val_loss /= (val_i + 1)
                 logging.info("Epoch {}, train loss {}, val loss {}".format(
@@ -199,7 +197,8 @@ class Seq2seqModel(nn.Module):
         decoded = self.run_greedy_inference(self.toy_data)
         words = self.toy_data.decode_and_reorganize(decoded)
         for i, word in enumerate(words):
-            logging.info("{}\t{}".format("".join(word.input), "".join(word.symbols)))
+            logging.info("{}\t{}".format(
+                "".join(word.input), "".join(word.symbols)))
 
     def save_model(self, epoch):
         save_path = os.path.join(
@@ -275,7 +274,7 @@ class Seq2seqModel(nn.Module):
 
             if isinstance(encoder_hidden, tuple):
                 decoder_hidden = tuple(e[:self.cfg.decoder_n_layers]
-                                    for e in encoder_hidden)
+                                       for e in encoder_hidden)
             else:
                 decoder_hidden = encoder_hidden[:self.cfg.decoder_n_layers]
             all_decoder_hidden = decoder_hidden
