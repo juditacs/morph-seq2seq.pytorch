@@ -268,7 +268,9 @@ class Seq2seqModel(nn.Module):
         else:
             batch_size = self.cfg.eval_batch_size
         all_output = []
-        for src, src_len in test_data.batched_iter(batch_size):
+        for bi, (src, src_len) in enumerate(test_data.batched_iter(batch_size)):
+            if bi % 10 == 9:
+                logging.info("Batch {}, samples {}".format(bi, bi*batch_size))
             all_encoder_outputs, encoder_hidden = self.encoder(src, src_len)
 
             if isinstance(encoder_hidden, tuple):
