@@ -9,6 +9,7 @@
 from argparse import ArgumentParser
 import os
 from sys import stdin
+import logging
 
 import torch
 
@@ -95,5 +96,7 @@ def main():
             print("\t".join(map(str, out)))
 
 if __name__ == '__main__':
+    log_fmt = '%(asctime)s - %(levelname)s - %(message)s'
+    logging.basicConfig(level=logging.INFO, format=log_fmt)
     use_cuda = torch.cuda.is_available()
     main()
