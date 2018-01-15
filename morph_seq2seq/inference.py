@@ -22,6 +22,9 @@ def parse_args():
     p = ArgumentParser()
     p.add_argument("-e", "--experiment-dir", type=str,
                    help="Experiment directory")
+    p.add_argument("--model-file", type=str, default=None,
+                   help="Model pickle. If not specified, the latest "
+                   "model is used.")
     p.add_argument("-m", "--mode", choices=['greedy', 'beam_search'],
                    default='greedy')
     p.add_argument("-b", "--beam-width", type=int, default=3,
@@ -35,7 +38,8 @@ def parse_args():
 
 
 class Inference(object):
-    def __init__(self, exp_dir, test_file_fn, mode='greedy', beam_width=None):
+    def __init__(self, exp_dir, test_file_fn, model_fn=None,
+                 mode='greedy', beam_width=None):
         self.exp_dir = exp_dir
         cfg = os.path.join(exp_dir, 'config.yaml')
         self.cfg = InferenceConfig.from_yaml(cfg)
@@ -47,7 +51,8 @@ class Inference(object):
         self.model = Seq2seqModel(cfg=self.cfg, train_data=None, val_data=None)
         self.model = self.model.cuda() if use_cuda else self.model
         self.model.train(False)
-        model_fn = self.find_last_model()
+        if model_fn is None:
+            model_fn = self.find_last_model()
         self.model.load_state_dict(torch.load(model_fn))
         self.mode = mode
         self.beam_width = beam_width
@@ -73,7 +78,8 @@ class Inference(object):
 def main():
     args = parse_args()
     if args.mode == 'greedy':
-        inf_model = Inference(args.experiment_dir, args.test_file, args.mode)
+        inf_model = Inference(args.experiment_dir, args.test_file,
+                              mode=args.mode, model_fn=args.model_file)
         words = inf_model.run_inference()
         for word in words:
             if args.print_probabilities:
@@ -84,8 +90,9 @@ def main():
                                       "".join(word.symbols)))
 
     elif args.mode == 'beam_search':
-        inf_model = Inference(args.experiment_dir, args.test_file, args.mode,
-                              args.beam_width)
+        inf_model = Inference(args.experiment_dir, args.test_file,
+                              mode=args.mode, model_fn=args.model_file,
+                              beam_width=args.beam_width)
         words = inf_model.run_inference()
         for word in words:
             out = ["".join(word[0])]
