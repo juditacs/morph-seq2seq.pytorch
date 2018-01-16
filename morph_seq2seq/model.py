@@ -268,8 +268,7 @@ class Seq2seqModel(nn.Module):
             batch_size = self.cfg.eval_batch_size
         all_output = []
         for bi, (src, src_len) in enumerate(test_data.batched_iter(batch_size)):
-            if bi % 10 == 9:
-                logging.info("Batch {}, samples {}".format(bi, bi*batch_size))
+            logging.info("Batch {}, samples {}".format(bi+1, bi*batch_size))
             all_encoder_outputs, encoder_hidden = self.encoder(src, src_len)
 
             if isinstance(encoder_hidden, tuple):
@@ -287,7 +286,7 @@ class Seq2seqModel(nn.Module):
                     decoder_hidden = all_decoder_hidden[:, si, :].unsqueeze(
                         1).contiguous()
                 encoder_outputs = all_encoder_outputs[:, si, :].unsqueeze(1)
-                maxlen = test_data.src_maxlen * 3  # arbitrary
+                maxlen = max(src_len) * 3  # arbitrary
                 if mode == 'greedy':
                     all_output.append(self.__decode_sample_greedy(
                         encoder_outputs,
