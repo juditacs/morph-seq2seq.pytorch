@@ -241,7 +241,7 @@ class Seq2seqModel(nn.Module):
             loss.backward()
             self.enc_opt.step()
             self.dec_opt.step()
-        return loss.data[0] / self.dataset.tgt_maxlen
+        return loss.data[0]
 
     def init_decoder_hidden(self, encoder_hidden):
         if self.cfg.cell_type == 'LSTM':
