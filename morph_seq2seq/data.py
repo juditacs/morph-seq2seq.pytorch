@@ -64,43 +64,62 @@ class Dataset(object):
             src = src.split(' ')
             tgt = tgt.split(' ')
             self.raw_samples.append((src, tgt))
-        self.src_maxlen = max(len(s[0]) for s in self.raw_samples)
-        self.tgt_maxlen = max(len(s[1]) for s in self.raw_samples)
-        self.src_seqlen = [len(s[0]) for s in self.raw_samples]
-        self.tgt_seqlen = [len(s[1]) + 1 for s in self.raw_samples]
         PAD = Dataset.CONSTANTS['PAD']
         EOS = Dataset.CONSTANTS['EOS']
         UNK = Dataset.CONSTANTS['UNK']
         for src, tgt in self.raw_samples:
             if frozen_vocab is True:
                 self.samples.append((
-                    [self.src_vocab.get(c, UNK) for c in src] +
-                    [PAD] * (self.src_maxlen-len(src)),
-                    [self.tgt_vocab.get(c, UNK) for c in tgt] + [EOS] +
-                    [PAD] * (self.tgt_maxlen-len(tgt)),
+                    [self.src_vocab.get(c, UNK) for c in src],
+                    [self.tgt_vocab.get(c, UNK) for c in tgt] + [EOS]
                 ))
             else:
                 self.samples.append((
-                    [self.src_vocab[c] for c in src] +
-                    [PAD] * (self.src_maxlen-len(src)),
-                    [self.tgt_vocab[c] for c in tgt] + [EOS] +
-                    [PAD] * (self.tgt_maxlen-len(tgt)),
+                    [self.src_vocab[c] for c in src],
+                    [self.tgt_vocab[c] for c in tgt] + [EOS]
                 ))
-        self.tgt_maxlen += 1
+
+    @staticmethod
+    def pad_batch(batch):
+        src_len = [len(s[0]) for s in batch]
+        tgt_len = [len(s[1]) for s in batch]
+        src_maxlen = max(src_len)
+        tgt_maxlen = max(tgt_len)
+        PAD = Dataset.CONSTANTS['PAD']
+        src = [
+            s[0] + [PAD for _ in range(src_maxlen-len(s[0]))]
+            for s in batch
+        ]
+        tgt = [
+            s[1] + [PAD for _ in range(tgt_maxlen-len(s[1]))]
+            for s in batch
+        ]
+        return src, tgt, src_len, tgt_len
+
+    @staticmethod
+    def pad_and_sort_batch(batch):
+        src, tgt, src_len, tgt_len = Dataset.pad_batch(batch)
+        batch = zip(src, tgt, src_len, tgt_len)
+        batch = sorted(batch, key=lambda x: -x[2])
+        src, tgt, src_len, tgt_len = zip(*batch)
+        return src, tgt, src_len, tgt_len
 
     def get_random_batch(self, batch_size):
         idx = np.random.choice(range(len(self.samples)), batch_size)
         idx = sorted(idx, key=lambda i: -self.src_seqlen[i])
         src = [self.samples[i][0] for i in idx]
         tgt = [self.samples[i][1] for i in idx]
+        src, tgt, src_len, tgt_len = self.pad_and_sort_batch(zip(src, tgt))
+
         src = Variable(torch.LongTensor(src)).transpose(0, 1)
-        src = src.cuda() if use_cuda else src
         tgt = Variable(torch.LongTensor(tgt)).transpose(0, 1)
-        tgt = tgt.cuda() if use_cuda else tgt
-        src_len = [self.src_seqlen[i] for i in idx]
-        tgt_len = [self.tgt_seqlen[i] for i in idx]
         tgt_len = Variable(torch.LongTensor(tgt_len))
-        tgt_len = tgt_len.cuda() if use_cuda else tgt_len
+
+        if use_cuda:
+            src = src.cuda()
+            tgt = tgt.cuda()
+            tgt_len = tgt_len.cuda()
+
         return src, tgt, src_len, tgt_len
 
     def batched_iter(self, batch_size):
@@ -109,15 +128,7 @@ class Dataset(object):
             start = i * batch_size
             end = min((i+1) * batch_size, len(self.samples))
             batch = self.samples[start:end]
-            src = [s[0] for s in batch]
-            tgt = [s[1] for s in batch]
-            src_len = self.src_seqlen[start:end]
-            tgt_len = self.tgt_seqlen[start:end]
-
-            batch = zip(src, tgt, src_len, tgt_len)
-            batch = sorted(batch, key=lambda x: -x[2])
-
-            src, tgt, src_len, tgt_len = zip(*batch)
+            src, tgt, src_len, tgt_len = self.pad_and_sort_batch(batch)
 
             src = Variable(torch.LongTensor(src)).transpose(0, 1)
             tgt = Variable(torch.LongTensor(tgt)).transpose(0, 1)
@@ -165,7 +176,7 @@ class InferenceDataset(Dataset):
     def __copy_attrs(self, dataset):
         self.src_vocab = dataset.src_vocab
         self.tgt_vocab = dataset.tgt_vocab
-        self.src_maxlen = dataset.src_maxlen
+        # self.src_maxlen = dataset.src_maxlen
 
     def load_vocabs(self):
         with open(self.cfg.src_vocab_file) as f:
@@ -192,23 +203,30 @@ class InferenceDataset(Dataset):
             enumerate(self.raw_samples), key=lambda x: -len(x[1])))
         PAD = Dataset.CONSTANTS['PAD']
         UNK = Dataset.CONSTANTS['UNK']
-        maxlen = max(len(s) for s in samples)
+        #maxlen = max(len(s) for s in samples)
         self.samples = [
-            [self.src_vocab.get(c, UNK) for c in src] +
-            [PAD] * (maxlen-len(src))
+            [self.src_vocab.get(c, UNK) for c in src]
+            #[PAD] * (maxlen-len(src))
             for src in samples
         ]
         self.src_len = [len(s) for s in samples]
-        if not hasattr(self, 'src_maxlen'):
-            self.src_maxlen = maxlen
+        #if not hasattr(self, 'src_maxlen'):
+            #self.src_maxlen = maxlen
 
     def batched_iter(self, batch_size):
+        PAD = Dataset.CONSTANTS['PAD']
         batch_count = int(np.ceil(len(self.samples) / batch_size))
         for i in range(batch_count):
             start = i * batch_size
             end = min((i+1) * batch_size, len(self.samples))
             batch = self.samples[start:end]
-            batch_len = self.src_len[start:end]
+            #batch_len = self.src_len[start:end]
+            batch_len = [len(s) for s in batch]
+            maxlen = max(batch_len)
+            batch = [
+                sample + [PAD] * (maxlen-len(sample))
+                for sample in batch
+            ]
             batch = Variable(torch.LongTensor(batch)).transpose(0, 1)
             batch = batch.cuda() if use_cuda else batch
             yield batch, batch_len
