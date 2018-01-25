@@ -194,11 +194,14 @@ class Seq2seqModel(nn.Module):
     def eval_toy(self):
         if self.toy_data is None:
             return
+        bs = self.cfg.eval_batch_size
+        self.cfg.eval_batch_size = 1
         decoded = self.run_greedy_inference(self.toy_data)
         words = self.toy_data.decode_and_reorganize(decoded)
         for i, word in enumerate(words):
             logging.info("{}\t{}".format(
                 "".join(word.input), "".join(word.symbols)))
+        self.cfg.eval_batch_size = bs
 
     def save_model(self, epoch):
         save_path = os.path.join(
@@ -241,7 +244,7 @@ class Seq2seqModel(nn.Module):
             loss.backward()
             self.enc_opt.step()
             self.dec_opt.step()
-        return loss.data[0]
+        return loss.data[0] / batch_size
 
     def init_decoder_hidden(self, encoder_hidden):
         if self.cfg.cell_type == 'LSTM':
@@ -267,6 +270,7 @@ class Seq2seqModel(nn.Module):
         else:
             batch_size = self.cfg.eval_batch_size
         all_output = []
+        batch_size = 1
         for bi, (src, src_len) in enumerate(test_data.batched_iter(batch_size)):
             logging.info("Batch {}, samples {}".format(bi+1, bi*batch_size))
             all_encoder_outputs, encoder_hidden = self.encoder(src, src_len)
