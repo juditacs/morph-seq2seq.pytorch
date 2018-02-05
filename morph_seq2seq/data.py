@@ -87,7 +87,7 @@ class Dataset(object):
         tgt_maxlen = max(tgt_len)
         PAD = Dataset.CONSTANTS['PAD']
         src = [
-            s[0] + [PAD for _ in range(src_maxlen-len(s[0]))]
+            [PAD for _ in range(src_maxlen-len(s[0]))] + s[0]
             for s in batch
         ]
         tgt = [
@@ -224,7 +224,7 @@ class InferenceDataset(Dataset):
             batch_len = [len(s) for s in batch]
             maxlen = max(batch_len)
             batch = [
-                sample + [PAD] * (maxlen-len(sample))
+                [PAD] * (maxlen-len(sample)) + sample
                 for sample in batch
             ]
             batch = Variable(torch.LongTensor(batch)).transpose(0, 1)

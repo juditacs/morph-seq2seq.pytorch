@@ -52,9 +52,9 @@ class EncoderRNN(nn.Module):
     def forward(self, input, input_seqlen):
         embedded = self.embedding(input)
         embedded = self.embedding_dropout(embedded)
-        packed = torch.nn.utils.rnn.pack_padded_sequence(embedded, input_seqlen)
-        outputs, hidden = self.cell(packed)
-        outputs, ol = torch.nn.utils.rnn.pad_packed_sequence(outputs)
+        #packed = torch.nn.utils.rnn.pack_padded_sequence(embedded, input_seqlen)
+        outputs, hidden = self.cell(embedded)
+        #outputs, ol = torch.nn.utils.rnn.pad_packed_sequence(outputs)
         outputs = outputs[:, :, :self.cfg.hidden_size] + \
             outputs[:, :, self.cfg.hidden_size:]
         return outputs, hidden
