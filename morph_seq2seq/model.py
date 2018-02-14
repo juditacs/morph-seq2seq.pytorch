@@ -31,6 +31,7 @@ class EncoderRNN(nn.Module):
 
         self.embedding_dropout = nn.Dropout(cfg.dropout)
         self.embedding = nn.Embedding(cfg.input_size, cfg.src_embedding_size)
+        nn.init.xavier_uniform(self.embedding.weight)
         self.__init_cell()
 
     def __init_cell(self):
@@ -101,6 +102,7 @@ class LuongAttentionDecoder(nn.Module):
 
         self.embedding_dropout = nn.Dropout(cfg.dropout)
         self.embedding = nn.Embedding(self.output_size, self.embedding_size)
+        nn.init.xavier_uniform(self.embedding.weight)
         self.__init_cell()
         self.concat = nn.Linear(2*self.hidden_size, self.hidden_size)
         self.out = nn.Linear(self.hidden_size, self.output_size)
