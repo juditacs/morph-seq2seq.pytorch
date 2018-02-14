@@ -198,11 +198,13 @@ class Seq2seqModel(nn.Module):
             return
         bs = self.cfg.eval_batch_size
         self.cfg.eval_batch_size = 1
-        decoded = self.run_greedy_inference(self.toy_data)
-        words = self.toy_data.decode_and_reorganize(decoded)
-        for i, word in enumerate(words):
-            logging.info("{}\t{}".format(
-                "".join(word.input), "".join(word.symbols)))
+        for decoded in self.run_beam_search_inference(self.toy_data, 3):
+            words = self.toy_data.decode_and_reorganize_beams(decoded)
+            for i, word in enumerate(words):
+                out = ["".join(word[0])]
+                for beam in word[1]:
+                    out.append("".join(beam.symbols))
+                logging.info("\t".join(out))
         self.cfg.eval_batch_size = bs
 
     def save_model(self, epoch):
@@ -263,18 +265,13 @@ class Seq2seqModel(nn.Module):
         return self.run_inference(test_data, 'greedy')
 
     def run_beam_search_inference(self, test_data, beam_width):
-        return self.run_inference(test_data, 'beam_search', beam_width)
+        yield from self.run_inference(test_data, 'beam_search', beam_width)
 
-    def run_inference(self, test_data, mode='greedy', beam_width=3):
+    def run_inference(self, test_data, mode='greedy', beam_width=3, batch_size=1):
         assert isinstance(test_data, InferenceDataset)
-        if self.cfg.eval_batch_size is None:
-            batch_size = self.cfg.train_schedule[0]['batch_size']
-        else:
-            batch_size = self.cfg.eval_batch_size
-        all_output = []
-        batch_size = 1
         for bi, (src, src_len) in enumerate(test_data.batched_iter(batch_size)):
-            logging.info("Batch {}, samples {}".format(bi+1, bi*batch_size))
+            all_output = []
+            logging.debug("Batch {}, samples {}".format(bi+1, bi*batch_size))
             all_encoder_outputs, encoder_hidden = self.encoder(src, src_len)
 
             if isinstance(encoder_hidden, tuple):
@@ -307,7 +304,10 @@ class Seq2seqModel(nn.Module):
                     while decoder.is_finished() is False:
                         decoder.forward()
                     all_output.append(decoder.get_finished_candidates())
-        return all_output
+            start = bi * batch_size
+            end = (bi+1) * batch_size
+            input_words = test_data.raw_samples[start:end]
+            yield list(zip(input_words, all_output))
 
     def __decode_sample_greedy(self, encoder_outputs, decoder_hidden, dataset,
                                maxlen):

@@ -8,7 +8,7 @@
 
 from argparse import ArgumentParser
 import os
-from sys import stdin
+from sys import stdin, stdout
 import logging
 
 import torch
@@ -69,10 +69,10 @@ class Inference(object):
             words = self.test_data.decode_and_reorganize(decoded)
             return words
         if self.mode == 'beam_search':
-            decoded = self.model.run_beam_search_inference(
-                self.test_data, self.beam_width)
-            words = self.test_data.decode_and_reorganize_beams(decoded)
-            return words
+            for decoded in self.model.run_beam_search_inference(
+                self.test_data, self.beam_width):
+                words = self.test_data.decode_and_reorganize_beams(decoded)
+                yield words
 
 
 def main():
@@ -80,27 +80,28 @@ def main():
     if args.mode == 'greedy':
         inf_model = Inference(args.experiment_dir, args.test_file,
                               mode=args.mode, model_fn=args.model_file)
-        words = inf_model.run_inference()
-        for word in words:
-            if args.print_probabilities:
-                print("{}\t{}\t{}".format("".join(word.input),
-                                          "".join(word.symbols), word.prob))
-            else:
-                print("{}\t{}".format("".join(word.input),
-                                      "".join(word.symbols)))
+        for words in inf_model.run_inference():
+            for word in words:
+                if args.print_probabilities:
+                    print("{}\t{}\t{}".format("".join(word.input),
+                                              "".join(word.symbols), word.prob))
+                else:
+                    print("{}\t{}".format("".join(word.input),
+                                          "".join(word.symbols)))
 
     elif args.mode == 'beam_search':
         inf_model = Inference(args.experiment_dir, args.test_file,
                               mode=args.mode, model_fn=args.model_file,
                               beam_width=args.beam_width)
-        words = inf_model.run_inference()
-        for word in words:
-            out = ["".join(word[0])]
-            for beam in word[1]:
-                out.append("".join(beam.symbols))
-                if args.print_probabilities:
-                    out.append(beam.prob)
-            print("\t".join(map(str, out)))
+        for words in inf_model.run_inference():
+            for word in words:
+                out = ["".join(word[0])]
+                for beam in word[1]:
+                    out.append("".join(beam.symbols))
+                    if args.print_probabilities:
+                        out.append(beam.prob)
+                print("\t".join(map(str, out)))
+            stdout.flush()
 
 if __name__ == '__main__':
     log_fmt = '%(asctime)s - %(levelname)s - %(message)s'
