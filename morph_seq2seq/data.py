@@ -199,19 +199,15 @@ class InferenceDataset(Dataset):
 
     def load_words(self, words):
         self.raw_samples = words
-        self.len_mapping, samples = zip(*sorted(
-            enumerate(self.raw_samples), key=lambda x: -len(x[1])))
         PAD = Dataset.CONSTANTS['PAD']
         UNK = Dataset.CONSTANTS['UNK']
-        #maxlen = max(len(s) for s in samples)
+        maxlen = max(len(s) for s in self.raw_samples)
         self.samples = [
+            [PAD] * (maxlen-len(src)) +
             [self.src_vocab.get(c, UNK) for c in src]
-            #[PAD] * (maxlen-len(src))
-            for src in samples
+            for src in self.raw_samples
         ]
-        self.src_len = [len(s) for s in samples]
-        #if not hasattr(self, 'src_maxlen'):
-            #self.src_maxlen = maxlen
+        self.src_len = [len(s) for s in self.raw_samples]
 
     def batched_iter(self, batch_size):
         PAD = Dataset.CONSTANTS['PAD']
@@ -220,7 +216,6 @@ class InferenceDataset(Dataset):
             start = i * batch_size
             end = min((i+1) * batch_size, len(self.samples))
             batch = self.samples[start:end]
-            #batch_len = self.src_len[start:end]
             batch_len = [len(s) for s in batch]
             maxlen = max(batch_len)
             batch = [
@@ -247,18 +242,13 @@ class InferenceDataset(Dataset):
         self.tgt_inv_vocab = {v: k for k, v in self.tgt_vocab.items()}
         EOS = self.CONSTANTS['EOS']
         for words in outputs:
-            for word in words:
+            for word in words[1]:
                 try:
                     word.idx = word.idx[:word.idx.index(EOS)]
                 except ValueError:
                     pass
                 word.symbols = [self.tgt_inv_vocab[s] for s in word.idx]
-        inv_len_mapping = {v: i for i, v in enumerate(self.len_mapping)}
-        decoded = []
-        for src_i in range(len(outputs)):
-            tgt_i = inv_len_mapping[src_i]
-            decoded.append((self.raw_samples[src_i], outputs[tgt_i]))
-        return decoded
+        return outputs
 
 
 class DecodedWord(object):
