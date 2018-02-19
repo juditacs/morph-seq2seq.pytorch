@@ -239,6 +239,8 @@ class Seq2seqModel(nn.Module):
             else:
                 val, idx = decoder_output.max(-1)
                 decoder_input = idx
+        self.enc_opt.zero_grad()
+        self.dec_opt.zero_grad()
         loss = masked_cross_entropy(
             all_decoder_outputs.transpose(0, 1).contiguous(),
             tgt.transpose(0, 1).contiguous(),
