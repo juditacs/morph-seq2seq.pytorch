@@ -228,14 +228,12 @@ class InferenceDataset(Dataset):
 
     def decode_and_reorganize(self, outputs):
         self.tgt_inv_vocab = {v: k for k, v in self.tgt_vocab.items()}
-        for word in outputs:
-            word.symbols = [self.tgt_inv_vocab[s] for s in word.idx]
-        inv_len_mapping = {v: i for i, v in enumerate(self.len_mapping)}
         decoded = []
-        for src_i in range(len(outputs)):
-            tgt_i = inv_len_mapping[src_i]
-            decoded.append(outputs[tgt_i])
-            outputs[tgt_i].input = self.raw_samples[src_i]
+        for word in outputs:
+            input_word, word = word[0]
+            word.symbols = [self.tgt_inv_vocab[s] for s in word.idx]
+            word.input = input_word
+            decoded.append(word)
         return decoded
 
     def decode_and_reorganize_beams(self, outputs):

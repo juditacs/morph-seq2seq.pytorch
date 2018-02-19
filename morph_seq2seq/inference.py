@@ -69,7 +69,7 @@ class Inference(object):
         if self.mode == 'greedy':
             decoded = self.model.run_greedy_inference(self.test_data)
             words = self.test_data.decode_and_reorganize(decoded)
-            return words
+            yield words
         if self.mode == 'beam_search':
             for decoded in self.model.run_beam_search_inference(
                 self.test_data, self.beam_width):
