@@ -1,0 +1,22 @@
+train_file: ${DATA_DIR}/szeged/emmorph_ana/morph_ana.train
+dev_file: ${DATA_DIR}/szeged/emmorph_ana/morph_ana.dev
+
+experiment_dir: ${EXP_DIR}/morph_ana
+generate_empty_subdir: true
+
+cell_type: LSTM
+hidden_size: 512
+src_embedding_size: 40
+tgt_embedding_size: 50 
+encoder_n_layers: 1
+decoder_n_layers: 1
+eval_batch_size: 128
+teacher_forcing_ratio: 1.0
+optimizer: Adam
+dropout: 0.0
+train_schedule:
+    #- {lr: 0.01, epochs: 10, batch_size: 128}
+    #- {lr: 0.001, epochs: 10, batch_size: 128}
+    - {lr: 0.0001, epochs: 100, batch_size: 128}
+
+toy_eval: [almával, megszerettet]
