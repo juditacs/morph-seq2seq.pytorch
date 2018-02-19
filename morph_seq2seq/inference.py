@@ -53,6 +53,8 @@ class Inference(object):
         self.model.train(False)
         if model_fn is None:
             model_fn = self.find_last_model()
+        logging.info("Loading state dict from model file: {}".format(
+            model_fn))
         self.model.load_state_dict(torch.load(model_fn))
         self.mode = mode
         self.beam_width = beam_width
